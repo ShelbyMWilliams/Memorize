@@ -35,6 +35,8 @@ textarea{min-height:50vh;resize:vertical}
 #read .l{display:block;min-height:1em;margin-bottom:.55em}
 .w.h{color:var(--tx)}
 .o{color:var(--mu)}
+.mg{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px}.mg h3{margin:0 0 8px;font-size:17px}
+.mo{display:flex;justify-content:space-between;padding:14px 12px;border-radius:10px;background:var(--bg);margin-bottom:6px;cursor:pointer}.mo.on{background:var(--ac2);outline:1px solid var(--ac)}.mo span{color:var(--mu)}
 .sl{padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mu);cursor:pointer;white-space:pre-wrap}
 .sl.on{background:var(--ac2);color:var(--tx);border-color:var(--ac)}
 .w.t{background:var(--ac2)}
@@ -155,16 +157,32 @@ function renderEditor(t){
   $("#sv").onclick=function(){
     var body=$("#bd").value.replace(/\r/g,"").trim(),offM=[];if(!body)return;
     body=body.split("\n").map(function(l,i){if(/^\s*\/\/\//.test(l)){offM.push(i);return l.replace(/^\s*\/\/\/\s?/,"")}return l}).join("\n");
-    var n=t||{id:uuid(),level:0,mode:"blank",seed:Math.floor(Math.random()*1e9),speed:30};
+    var n=t||{id:uuid(),level:0,mode:"except-last",seed:Math.floor(Math.random()*1e9),speed:30};
     n.title=$("#ti").value.trim()||body.split("\n")[0].slice(0,40);
     if(t&&t.body!==body){n.seed=Math.floor(Math.random()*1e9)}
     if(offM.length)n.off=offM;else if(!t||t.body!==body)n.off=[];
-    n.body=body;persist(n);cur=n;renderStudy();
+    n.body=body;persist(n);cur=n;if(t)renderStudy();else renderMethod();
   };
   var d=$("#del");if(d)d.onclick=function(){if(confirm("Delete this text on all devices?")){remove(t.id);renderList()}};
 }
 
 /* ---------- study view ---------- */
+var METHODS=[
+ ["Hide words except first letter","First letter",[["except-last","Starting with the last word","last word"],["except-first","Starting with the first word","first word"],["except-random","Randomly","random"]]],
+ ["Hide entire words","Words",[["words-last","Starting with the last word","last word"],["words-first","Starting with the first word","first word"],["words-random","Randomly","random"]]],
+ ["Show first words of each paragraph","First words",[["para3","Show 3 words","3 words"],["para2","Show 2 words","2 words"],["para1","Show 1 word","1 word"]]],
+ ["Reveal the text line by line","Lines",[["lines","Hide entire line","each line"]]]
+];
+function modeLabel(m){m=normMode(m);for(var i=0;i<METHODS.length;i++)for(var j=0;j<METHODS[i][2].length;j++)if(METHODS[i][2][j][0]===m)return METHODS[i][1]+" \u00b7 "+METHODS[i][2][j][2];return "Method"}
+function renderMethod(){
+  stopScroll();ft.classList.add("hide");
+  hd.innerHTML='<button id="bk">\u2039 Back</button><h1>Pick a method</h1>';
+  var h='<div class="wrap">';
+  METHODS.forEach(function(g){h+='<div class="mg"><h3>'+g[0]+'</h3>';g[2].forEach(function(o){h+='<div class="mo'+(normMode(cur.mode)===o[0]?" on":"")+'" data-m="'+o[0]+'">'+o[1]+'<span>\u203a</span></div>'});h+='</div>'});
+  main.innerHTML=h+'</div>';main.scrollTop=0;
+  $("#bk").onclick=function(){renderStudy()};
+  main.firstChild.onclick=function(e){var o=e.target.closest(".mo");if(!o)return;cur.mode=o.dataset.m;persist(cur);renderStudy()};
+}
 function renderSelect(){
   stopScroll();ft.classList.add("hide");
   var lines=cur.body.split("\n"),off={},sel={};
@@ -190,7 +208,7 @@ function renderSelect(){
   $("#bk").onclick=function(){renderStudy()};
   $("#sv").onclick=function(){cur.off=[];lines.forEach(function(l,i){if(l.trim()&&!sel[i])cur.off.push(i)});persist(cur);renderStudy()};
 }
-var scrollOn=false,raf=0,lastTs=0,acc=0;
+var maxK=0,scrollOn=false,raf=0,lastTs=0,acc=0;
 function stopScroll(){scrollOn=false;cancelAnimationFrame(raf);var b=$("#play");if(b)b.textContent="▶ Scroll"}
 function tick(ts){
   if(!scrollOn)return;
@@ -203,19 +221,21 @@ function build(){
   var lines=cur.body.split("\n"),words=[],lineInfo=[],offSet={};
   (cur.off||[]).forEach(function(i){offSet[i]=1});
   lines.forEach(function(ln,li){var ws=offSet[li]?[]:(ln.match(/\S+/g)||[]);lineInfo.push({ws:ws,start:words.length});ws.forEach(function(w){words.push({w:w,l:li})})});
-  var hiddenW={},hiddenL={},n=words.length,m=cur.mode,i,j;
+  var hiddenW={},hiddenL={},n=words.length,m=cur.mode,i,j,tot=0,mx=0;
   var hb0=lines.some(function(x,q){return !x.trim()&&q>0&&q<lines.length-1}),pd0=0,pb0=true,lp0=[],pw={},pl={};
   lines.forEach(function(ln){if(!ln.trim()){pb0=true;lp0.push(-1);return}if(hb0){if(pb0)pd0++}else pd0++;pb0=false;lp0.push(pd0)});
   words.forEach(function(w,q){var p=lp0[w.l];(pw[p]=pw[p]||[]).push(q)});
   lineInfo.forEach(function(x,q){if(x.ws.length){var p=lp0[q];(pl[p]=pl[p]||[]).push(q)}});
+  if(cur.k==null){var lg=0;Object.keys(pw).forEach(function(p){lg=Math.max(lg,pw[p].length)});cur.k=Math.round((cur.level||0)*lg)}
+  cur.k=Math.max(0,cur.k|0);
   if(m==="lines"){
-    Object.keys(pl).forEach(function(p){var a=pl[p],c=Math.ceil(cur.level*a.length-1e-9);for(i=0;i<c;i++)hiddenL[a[a.length-1-i]]=1});
+    Object.keys(pl).forEach(function(p){var a=pl[p],c=Math.min(cur.k,a.length);tot+=a.length;mx=Math.max(mx,a.length);for(i=0;i<c;i++)hiddenL[a[a.length-1-i]]=1});
   }else if(/^para/.test(m)){
     var keep=+m.slice(4),hasBlank=lines.some(function(x,q){return !x.trim()&&q>0&&q<lines.length-1}),pid=0,prevBlank=true,linePara=[],groups={};
     lines.forEach(function(ln){if(!ln.trim()){prevBlank=true;linePara.push(-1);return}if(hasBlank){if(prevBlank)pid++}else pid++;prevBlank=false;linePara.push(pid)});
     words.forEach(function(w,q){var p=linePara[w.l];(groups[p]=groups[p]||[]).push(q)});
     Object.keys(groups).forEach(function(p){
-      var h=groups[p].slice(keep),c=Math.ceil(cur.level*h.length-1e-9);
+      var h=groups[p].slice(keep),c=Math.min(cur.k,h.length);tot+=h.length;mx=Math.max(mx,h.length);
       for(j=0;j<c;j++)hiddenW[h[h.length-1-j]]=1;
     });
   }else{
@@ -224,10 +244,11 @@ function build(){
     Object.keys(pw).forEach(function(p){
       var a=pw[p].slice();
       if(dir==="last")a.reverse();else if(dir==="random")a.sort(function(x,y){return pos[x]-pos[y]});
-      var c=Math.ceil(cur.level*a.length-1e-9);
+      var c=Math.min(cur.k,a.length);tot+=a.length;mx=Math.max(mx,a.length);
       for(j=0;j<c;j++)hiddenW[a[j]]=1;
     });
   }
+  maxK=mx;cur.level=tot?Object.keys(m==="lines"?hiddenL:hiddenW).length/tot:0;
   var h="",idx=0;
   lines.forEach(function(ln,li){
     var parts=ln.split(/(\s+)/),out="";
@@ -248,29 +269,29 @@ function renderStudy(keep){
   var top=keep?main.scrollTop:0;
   hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><span class="sync" id="sync"></span><button id="ln">Lines</button><button id="ed">Edit</button>';
   ft.classList.remove("hide");
-  ft.innerHTML='<div class="row"><button id="rev" style="flex:1">− Reveal</button><button id="hide" class="p" style="flex:1">+ Hide</button></div>'+
-  '<div class="row"><input type="range" id="lv" min="0" max="100" value="'+Math.round(cur.level*100)+'"><span class="pct" id="pc"></span>'+
-  '<select id="md" style="max-width:58%"><optgroup label="Hide words except first letter"><option value="except-last">First letter · from last word</option><option value="except-first">First letter · from first word</option><option value="except-random">First letter · randomly</option></optgroup><optgroup label="Hide entire words"><option value="words-last">Words · from last word</option><option value="words-first">Words · from first word</option><option value="words-random">Words · randomly</option></optgroup><optgroup label="Show first words of each paragraph"><option value="para3">Show 3 words</option><option value="para2">Show 2 words</option><option value="para1">Show 1 word</option></optgroup><optgroup label="Line by line"><option value="lines">Hide entire line (from last)</option></optgroup></select></div>'+
+  ft.innerHTML='<div class="row"><button id="rev" style="flex:1">− Reveal</button><select id="st" title="Words per tap" style="width:62px"><option value="1">×1</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option></select><button id="hide" class="p" style="flex:1">+ Hide</button></div>'+
+  '<div class="row"><input type="range" id="lv" min="0" max="1" value="0"><span class="pct" id="pc"></span>'+
+  '<button id="md" style="max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Method</button></div>'+
   '<div class="row"><button id="play">▶ Scroll</button><input type="range" id="sp" min="5" max="150" value="'+cur.speed+'"><button id="shuf" title="New random order">⟳ Reshuffle</button></div>';
   main.innerHTML='<div id="read"></div>';
   var rd=$("#read");draw();main.scrollTop=top;setSync();
-  $("#md").value=cur.mode;
-  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;
-  function setLevel(v){cur.level=Math.max(0,Math.min(1,v));$("#lv").value=Math.round(cur.level*100);draw();persistSoon(cur)}
-  function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;$("#pc").textContent=Math.round(cur.level*100)+"%"}
+  $("#md").textContent=modeLabel(cur.mode);
+  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;$("#st").value=String(cur.step||1);$("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
+  function setK(v){cur.k=Math.max(0,Math.min(maxK,Math.round(v)));draw();persistSoon(cur)}
+  function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;var lv=$("#lv");lv.max=Math.max(maxK,1);lv.value=Math.min(cur.k,maxK);$("#pc").textContent=Math.min(cur.k,maxK)+"/"+maxK}
   var step=function(){var n=(cur.body.match(/\S+/g)||[]).length;return Math.max(0.03,Math.min(0.15,3/Math.max(n,1)*2))};
   // Hide: tap = hide more, long press = hide everything
   var hT,hLong=false,hb=$("#hide");
-  hb.onpointerdown=function(){hLong=false;hT=setTimeout(function(){hLong=true;setLevel(1);if(navigator.vibrate)navigator.vibrate(30)},600)};
+  hb.onpointerdown=function(){hLong=false;hT=setTimeout(function(){hLong=true;setK(maxK);if(navigator.vibrate)navigator.vibrate(30)},600)};
   hb.onpointerup=hb.onpointerleave=hb.onpointercancel=function(){clearTimeout(hT)};
-  hb.onclick=function(){if(hLong){hLong=false;return}setLevel(cur.level+0.1)};
+  hb.onclick=function(){if(hLong){hLong=false;return}setK(cur.k+(cur.step||1))};
   // Reveal: tap = show more, long press = reset to 0
   var rt,long=false,rv=$("#rev");
-  rv.onpointerdown=function(){long=false;rt=setTimeout(function(){long=true;setLevel(0);if(navigator.vibrate)navigator.vibrate(30)},600)};
+  rv.onpointerdown=function(){long=false;rt=setTimeout(function(){long=true;setK(0);if(navigator.vibrate)navigator.vibrate(30)},600)};
   rv.onpointerup=rv.onpointerleave=rv.onpointercancel=function(){clearTimeout(rt)};
-  rv.onclick=function(){if(long){long=false;return}setLevel(cur.level-0.1)};
-  $("#lv").oninput=function(e){setLevel(e.target.value/100)};
-  $("#md").onchange=function(e){cur.mode=e.target.value;draw();persistSoon(cur)};
+  rv.onclick=function(){if(long){long=false;return}setK(cur.k-(cur.step||1))};
+  $("#lv").oninput=function(e){setK(+e.target.value)};
+  $("#md").onclick=function(){renderMethod()};
   $("#shuf").onclick=function(){cur.seed=Math.floor(Math.random()*1e9);draw();persistSoon(cur)};
   $("#sp").oninput=function(e){cur.speed=+e.target.value;persistSoon(cur)};
   $("#play").onclick=function(){
