@@ -50,6 +50,8 @@ input[type=range]{flex:1;min-width:80px;accent-color:var(--ac)}
 label.f{display:inline-block}
 .hint{color:var(--mu);font-size:13px;margin:6px 0 14px}
 .hide{display:none!important}
+button,select,header,footer,.card,.mo,.sl{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input[type=text],textarea{-webkit-user-select:text;user-select:text}
 </style>
 </head>
 <body>
@@ -128,7 +130,7 @@ window.addEventListener("offline",function(){setSync()});
 function renderSettings(){
   stopScroll();ft.classList.add("hide");cur=null;
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
-  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-20-c</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-20-e</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
   $("#bk").onclick=renderList;
   $("#dsp").onclick=showDisplay;
   $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
@@ -164,7 +166,7 @@ function renderList(){
   ids.forEach(function(id){var t=texts[id],p=Math.round((t.level||0)*100);
     h+='<div class="card" data-id="'+id+'"><div style="flex:1;min-width:0"><b>'+esc(t.title||"Untitled")+'</b><small>'+(t.body||"").split(/\s+/).filter(Boolean).length+' words</small></div><div class="bar"><i style="width:'+p+'%"></i></div><small>'+p+'%</small></div>'});
   main.innerHTML=h+'</div>';main.scrollTop=0;
-  Array.prototype.forEach.call(main.querySelectorAll(".card"),function(c){c.onclick=function(){cur=texts[c.dataset.id];renderStudy()}});
+  Array.prototype.forEach.call(main.querySelectorAll(".card"),function(c){c.onclick=function(){cur=texts[c.dataset.id];renderMethod(true)}});
 }
 
 /* ---------- editor / import ---------- */
@@ -195,13 +197,14 @@ var METHODS=[
  ["Reveal the text line by line","Lines",[["lines","Hide entire line","each line"]]]
 ];
 function modeLabel(m){m=normMode(m);for(var i=0;i<METHODS.length;i++)for(var j=0;j<METHODS[i][2].length;j++)if(METHODS[i][2][j][0]===m)return METHODS[i][1]+" \u00b7 "+METHODS[i][2][j][2];return "Method"}
-function renderMethod(){
+function renderMethod(first){
   stopScroll();ft.classList.add("hide");
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>Pick a method</h1>';
-  var h='<div class="wrap">';
+  var h='<div class="wrap">'+(first?'<button class="p" id="go" style="width:100%;padding:15px;margin-bottom:12px">Continue with '+esc(modeLabel(cur.mode))+'</button>':'');
   METHODS.forEach(function(g){h+='<div class="mg"><h3>'+g[0]+'</h3>';g[2].forEach(function(o){h+='<div class="mo'+(normMode(cur.mode)===o[0]?" on":"")+'" data-m="'+o[0]+'">'+o[1]+'<span>\u203a</span></div>'});h+='</div>'});
   main.innerHTML=h+'</div>';main.scrollTop=0;
-  $("#bk").onclick=function(){renderStudy()};
+  $("#bk").onclick=function(){first?renderList():renderStudy()};
+  var go=$("#go");if(go)go.onclick=function(){renderStudy()};
   main.firstChild.onclick=function(e){var o=e.target.closest(".mo");if(!o)return;cur.mode=o.dataset.m;persist(cur);renderStudy()};
 }
 function renderSelect(){
@@ -288,18 +291,14 @@ function build(){
 function renderStudy(keep){
   if(!cur)return;
   var top=keep?main.scrollTop:0;
-  hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><button id="aa">Aa</button><button id="ln">Lines</button><button id="ed">Edit</button>';
+  hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><button id="gb" aria-label="Settings">\u2699</button>';
   ft.classList.remove("hide");
-  ft.innerHTML='<div class="row"><button id="rev" style="flex:1">− Reveal</button><select id="st" title="Words per tap" style="width:62px"><option value="1">×1</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option></select><button id="hide" class="p" style="flex:1">+ Hide</button></div>'+
-  '<div class="row"><input type="range" id="lv" min="0" max="1" value="0"><span class="pct" id="pc"></span>'+
-  '<button id="md" style="max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Method</button></div>'+
-  '<div class="row"><button id="play">▶ Scroll</button><input type="range" id="sp" min="5" max="150" value="'+cur.speed+'"><button id="shuf" title="New random order">⟳ Reshuffle</button></div>';
+  ft.innerHTML='<div class="row"><button id="rev" style="flex:1;padding:15px">\u2212 Reveal</button><button id="hide" class="p" style="flex:1;padding:15px">+ Hide</button></div>';
   main.innerHTML='<div id="read"></div>';
   var rd=$("#read");draw();main.scrollTop=top;setSync();
-  $("#md").textContent=modeLabel(cur.mode);
-  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;$("#aa").onclick=showDisplay;$("#st").value=String(cur.step||1);$("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
+  $("#bk").onclick=renderList;$("#gb").onclick=openSheet;
   function setK(v){cur.k=Math.max(0,Math.min(maxK,Math.round(v)));draw();persistSoon(cur)}
-  function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;var lv=$("#lv");lv.max=Math.max(maxK,1);lv.value=Math.min(cur.k,maxK);$("#pc").textContent=Math.min(cur.k,maxK)+"/"+maxK}
+  function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;var lv=$("#lv");if(lv){lv.max=Math.max(maxK,1);lv.value=Math.min(cur.k,maxK);$("#pc").textContent=Math.min(cur.k,maxK)+"/"+maxK}}
   var step=function(){var n=(cur.body.match(/\S+/g)||[]).length;return Math.max(0.03,Math.min(0.15,3/Math.max(n,1)*2))};
   // Hide: tap = hide more, long press = hide everything
   var hT,hLong=false,hb=$("#hide");
@@ -311,14 +310,34 @@ function renderStudy(keep){
   rv.onpointerdown=function(){long=false;rt=setTimeout(function(){long=true;setK(0);if(navigator.vibrate)navigator.vibrate(30)},600)};
   rv.onpointerup=rv.onpointerleave=rv.onpointercancel=function(){clearTimeout(rt)};
   rv.onclick=function(){if(long){long=false;return}setK(cur.k-(cur.step||1))};
-  $("#lv").oninput=function(e){setK(+e.target.value)};
-  $("#md").onclick=function(){renderMethod()};
-  $("#shuf").onclick=function(){cur.seed=Math.floor(Math.random()*1e9);draw();persistSoon(cur)};
-  $("#sp").oninput=function(e){cur.speed=+e.target.value;persistSoon(cur)};
-  $("#play").onclick=function(){
-    if(scrollOn){stopScroll();return}
-    scrollOn=true;lastTs=0;acc=0;this.textContent="❚❚ Stop";raf=requestAnimationFrame(tick);
-  };
+  function openSheet(){
+    if($("#sh"))return;
+    var d=document.createElement("div");d.id="sh";
+    d.style.cssText="position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center";
+    d.innerHTML='<div style="background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:85vh;overflow-y:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))">'+
+    '<div class="row" style="justify-content:space-between;margin-bottom:10px"><b style="font-size:18px">Settings</b><button id="sx">Done</button></div>'+
+    '<button id="md" style="width:100%;text-align:left;margin-bottom:12px">Method: '+esc(modeLabel(cur.mode))+' \u203a</button>'+
+    '<p class="hint" style="margin:0 0 4px">Words hidden per paragraph</p><div class="row"><input type="range" id="lv" min="0" max="1" value="0"><span class="pct" id="pc" style="min-width:60px"></span></div>'+
+    '<div class="row" style="margin:12px 0"><span style="flex:1">Words per Hide / Reveal tap</span><select id="st"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></div>'+
+    '<div class="row" style="margin-bottom:12px"><button id="play">'+(scrollOn?"\u275a\u275a Stop scroll":"\u25b6 Autoscroll")+'</button><input type="range" id="sp" min="5" max="150" value="'+cur.speed+'"></div>'+
+    '<div class="row"><button id="shuf" style="flex:1">\u27f3 Reshuffle random words</button></div>'+
+    '<div class="row" style="margin-top:12px"><button id="ln" style="flex:1">Select lines</button><button id="ed" style="flex:1">Edit text</button></div>'+
+    '<div class="row" style="margin-top:8px"><button id="aa" style="flex:1">Text size &amp; light / dark</button></div></div>';
+    document.body.appendChild(d);
+    var q=function(x){return d.querySelector(x)},close=function(){d.remove()};
+    d.onclick=function(e){if(e.target===d)close()};
+    q("#sx").onclick=close;
+    q("#md").onclick=function(){close();renderMethod()};
+    q("#ln").onclick=function(){close();renderSelect()};
+    q("#ed").onclick=function(){close();renderEditor(cur)};
+    q("#aa").onclick=showDisplay;
+    q("#st").value=String(cur.step||1);q("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
+    q("#lv").oninput=function(e){setK(+e.target.value)};
+    q("#shuf").onclick=function(){cur.seed=Math.floor(Math.random()*1e9);draw();persistSoon(cur)};
+    q("#sp").oninput=function(e){cur.speed=+e.target.value;persistSoon(cur)};
+    q("#play").onclick=function(){close();if(scrollOn){stopScroll();return}scrollOn=true;lastTs=0;acc=0;raf=requestAnimationFrame(tick)};
+    draw();
+  }
   main.addEventListener("touchstart",function(){if(scrollOn)stopScroll()},{passive:true});
   // hold on text: temporarily reveal everything; tap a word: peek at it
   var ht;
@@ -332,6 +351,7 @@ function renderStudy(keep){
   rd.addEventListener("touchend",function(){if(pd){pd=0;savePrefs()}});
   rd.onclick=function(e){var s=e.target.closest(".w.h");if(s){s.textContent=s.dataset.o;s.classList.add("t")}};
 }
+ft.oncontextmenu=hd.oncontextmenu=function(e){if(!/INPUT|TEXTAREA/.test(e.target.tagName))e.preventDefault()};
 renderList();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(function(){});
 })();
