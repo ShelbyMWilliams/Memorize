@@ -31,7 +31,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .bar i{display:block;height:100%;background:var(--ac);border-radius:3px}
 input[type=text],textarea{width:100%;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:10px}
 textarea{min-height:50vh;resize:vertical}
-#read{font-size:21px;line-height:1.7;padding:18px 16px 40vh;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;white-space:pre-wrap}
+#read{font-size:var(--fs,26px);line-height:1.7;padding:18px 16px 40vh;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;white-space:pre-wrap}
 #read .l{display:block;min-height:1em;margin-bottom:.55em}
 .w.h{color:var(--tx)}
 .o{color:var(--mu)}
@@ -63,6 +63,26 @@ var $=function(s){return document.querySelector(s)};
 var main=$("#main"),hd=$("#hd"),ft=$("#ft");
 var texts={}, cur=null, db=null, uid=null, col=null, saveT=null, lastWrite=0, syncState="local";
 var LS="memorize-texts-v1";
+var PK="memorize-prefs-v1",prefs={theme:"auto",fs:26};
+try{var pp=JSON.parse(localStorage.getItem(PK)||"null");if(pp){prefs.theme=pp.theme||"auto";prefs.fs=pp.fs||26}}catch(e){}
+function applyPrefs(){var r=document.documentElement;if(prefs.theme==="auto")r.removeAttribute("data-theme");else r.setAttribute("data-theme",prefs.theme);r.style.setProperty("--fs",prefs.fs+"px")}
+function savePrefs(){try{localStorage.setItem(PK,JSON.stringify(prefs))}catch(e){}}
+function setFs(v,defer){prefs.fs=Math.max(14,Math.min(56,Math.round(v)));applyPrefs();if(!defer)savePrefs()}
+applyPrefs();
+function showDisplay(){
+  if(document.getElementById("dp"))return;
+  var d=document.createElement("div");d.id="dp";
+  d.style.cssText="position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center";
+  d.innerHTML='<div style="background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px))"><div class="row" style="justify-content:space-between"><b style="font-size:18px">Display</b><button id="dx">Done</button></div><p class="hint">Reading text size (you can also pinch the text)</p><div class="row"><span style="font-size:14px">A</span><input type="range" id="fz" min="14" max="56" step="1"><span style="font-size:28px">A</span><span class="pct" id="fv"></span></div><p class="hint">Appearance</p><div class="row" id="tg"><button data-t="auto" style="flex:1">Auto</button><button data-t="light" style="flex:1">Light</button><button data-t="dark" style="flex:1">Dark</button></div><p class="hint">Saved on this device only, so your iPhone and iPad can each have their own size.</p></div>';
+  document.body.appendChild(d);
+  var fz=d.querySelector("#fz"),fv=d.querySelector("#fv"),tg=d.querySelector("#tg");
+  function paint(){fz.value=prefs.fs;fv.textContent=prefs.fs;Array.prototype.forEach.call(tg.children,function(b){b.className=b.dataset.t===prefs.theme?"p":""})}
+  paint();
+  fz.oninput=function(){setFs(+fz.value);fv.textContent=prefs.fs};
+  tg.onclick=function(e){var b=e.target.closest("button");if(!b)return;prefs.theme=b.dataset.t;applyPrefs();savePrefs();paint()};
+  var close=function(){d.remove()};
+  d.querySelector("#dx").onclick=close;d.onclick=function(e){if(e.target===d)close()};
+}
 
 /* ---------- storage: localStorage + GitHub sync ---------- */
 var GH_KEY="memorize-gh-v1",gh=null,pushT=null,syncing=false;
@@ -108,8 +128,9 @@ window.addEventListener("offline",function(){setSync()});
 function renderSettings(){
   stopScroll();ft.classList.add("hide");cur=null;
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
-  main.innerHTML='<div class="wrap" id="gset"><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
   $("#bk").onclick=renderList;
+  $("#dsp").onclick=showDisplay;
   $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
     gh={repo:r,token:t};try{localStorage.setItem(GH_KEY,JSON.stringify(gh))}catch(e){}
     syncing=false;sync();renderList()};
@@ -267,7 +288,7 @@ function build(){
 function renderStudy(keep){
   if(!cur)return;
   var top=keep?main.scrollTop:0;
-  hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><span class="sync" id="sync"></span><button id="ln">Lines</button><button id="ed">Edit</button>';
+  hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><button id="aa">Aa</button><button id="ln">Lines</button><button id="ed">Edit</button>';
   ft.classList.remove("hide");
   ft.innerHTML='<div class="row"><button id="rev" style="flex:1">− Reveal</button><select id="st" title="Words per tap" style="width:62px"><option value="1">×1</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option></select><button id="hide" class="p" style="flex:1">+ Hide</button></div>'+
   '<div class="row"><input type="range" id="lv" min="0" max="1" value="0"><span class="pct" id="pc"></span>'+
@@ -276,7 +297,7 @@ function renderStudy(keep){
   main.innerHTML='<div id="read"></div>';
   var rd=$("#read");draw();main.scrollTop=top;setSync();
   $("#md").textContent=modeLabel(cur.mode);
-  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;$("#st").value=String(cur.step||1);$("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
+  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;$("#aa").onclick=showDisplay;$("#st").value=String(cur.step||1);$("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
   function setK(v){cur.k=Math.max(0,Math.min(maxK,Math.round(v)));draw();persistSoon(cur)}
   function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;var lv=$("#lv");lv.max=Math.max(maxK,1);lv.value=Math.min(cur.k,maxK);$("#pc").textContent=Math.min(cur.k,maxK)+"/"+maxK}
   var step=function(){var n=(cur.body.match(/\S+/g)||[]).length;return Math.max(0.03,Math.min(0.15,3/Math.max(n,1)*2))};
@@ -305,6 +326,10 @@ function renderStudy(keep){
   var up=function(){clearTimeout(ht);if(rd.classList.contains("all")){rd.classList.remove("all");var sc=main.scrollTop;draw();main.scrollTop=sc}};
   rd.onpointerup=rd.onpointerleave=rd.onpointercancel=up;
   rd.oncontextmenu=function(e){e.preventDefault()};
+  var pd=0,pf=0,td=function(e){var a=e.touches[0],b=e.touches[1];return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)};
+  rd.addEventListener("touchstart",function(e){if(e.touches.length===2){clearTimeout(ht);pd=td(e);pf=prefs.fs}},{passive:true});
+  rd.addEventListener("touchmove",function(e){if(e.touches.length===2&&pd){e.preventDefault();setFs(pf*td(e)/pd,true)}},{passive:false});
+  rd.addEventListener("touchend",function(){if(pd){pd=0;savePrefs()}});
   rd.onclick=function(e){var s=e.target.closest(".w.h");if(s){s.textContent=s.dataset.o;s.classList.add("t")}};
 }
 renderList();
