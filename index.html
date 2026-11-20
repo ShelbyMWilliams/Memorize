@@ -128,7 +128,7 @@ window.addEventListener("offline",function(){setSync()});
 function renderSettings(){
   stopScroll();ft.classList.add("hide");cur=null;
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
-  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-20-c</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
   $("#bk").onclick=renderList;
   $("#dsp").onclick=showDisplay;
   $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
@@ -333,7 +333,7 @@ function renderStudy(keep){
   rd.onclick=function(e){var s=e.target.closest(".w.h");if(s){s.textContent=s.dataset.o;s.classList.add("t")}};
 }
 renderList();
-if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(function(){});
 })();
 </script>
 </body>
