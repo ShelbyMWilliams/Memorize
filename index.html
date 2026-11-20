@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Memorize">
+<meta name="theme-color" content="#2f6f5e">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memorize</title>
+<style>
+:root{--bg:#faf8f4;--sf:#fff;--tx:#1f1d1a;--mu:#7a756c;--ac:#2f6f5e;--ac2:#e8f2ee;--bd:#e4dfd5;--hid:#d9d3c6;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--sf:#222120;--tx:#efece6;--mu:#9a958b;--ac:#6fc3a9;--ac2:#1f2e29;--bd:#34322e;--hid:#46433d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171614;--sf:#222120;--tx:#efece6;--mu:#9a958b;--ac:#6fc3a9;--ac2:#1f2e29;--bd:#34322e;--hid:#46433d;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--sf)}
+header h1{font-size:18px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:9px 14px;cursor:pointer;touch-action:manipulation}
+button.p{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}
+button:active{opacity:.7}
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.card b{display:block}.card small{color:var(--mu)}
+.bar{flex:1;height:6px;background:var(--bd);border-radius:3px;max-width:90px}
+.bar i{display:block;height:100%;background:var(--ac);border-radius:3px}
+input[type=text],textarea{width:100%;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:10px}
+textarea{min-height:50vh;resize:vertical}
+#read{font-size:21px;line-height:1.7;padding:18px 16px 40vh;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;white-space:pre-wrap}
+#read .l{display:block;min-height:1em;margin-bottom:.55em}
+.w.h{color:var(--tx)}
+.o{color:var(--mu)}
+.sl{padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mu);cursor:pointer;white-space:pre-wrap}
+.sl.on{background:var(--ac2);color:var(--tx);border-color:var(--ac)}
+.w.t{background:var(--ac2)}
+#read.all .w.h{background:none;color:inherit;padding:0}
+footer{border-top:1px solid var(--bd);background:var(--sf);padding:10px 14px calc(10px)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:760px;margin:0 auto}
+.row+.row{margin-top:8px}
+input[type=range]{flex:1;min-width:80px;accent-color:var(--ac)}
+.pct{min-width:44px;text-align:right;color:var(--mu);font-variant-numeric:tabular-nums}
+.sync{font-size:12px;color:var(--mu)}
+label.f{display:inline-block}
+.hint{color:var(--mu);font-size:13px;margin:6px 0 14px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header id="hd"></header>
+<main id="main"></main>
+<footer id="ft" class="hide"></footer>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var main=$("#main"),hd=$("#hd"),ft=$("#ft");
+var texts={}, cur=null, db=null, uid=null, col=null, saveT=null, lastWrite=0, syncState="local";
+var LS="memorize-texts-v1";
+
+/* ---------- storage: localStorage + GitHub sync ---------- */
+var GH_KEY="memorize-gh-v1",gh=null,pushT=null,syncing=false;
+try{gh=JSON.parse(localStorage.getItem(GH_KEY)||"null")}catch(e){}
+function lsLoad(){try{return JSON.parse(localStorage.getItem(LS)||"{}")}catch(e){return {}}}
+function lsSave(){try{localStorage.setItem(LS,JSON.stringify(texts))}catch(e){}}
+texts=lsLoad();
+function setSync(){var e=$("#sync");if(!e)return;e.textContent=!gh?"Local only":!navigator.onLine?"\u25cb Offline \u2013 saved":({synced:"\u25cf Synced",saving:"\u25cb Saving\u2026",busy:"\u25cb Syncing\u2026",error:"\u26a0 Sync error"}[syncState]||"\u25cf Synced")}
+function persist(t){t.updated=Date.now();texts[t.id]=t;lsSave();schedulePush()}
+function persistSoon(t){clearTimeout(saveT);saveT=setTimeout(function(){persist(t)},500)}
+function remove(id){texts[id]={id:id,deleted:true,updated:Date.now()};lsSave();schedulePush()}
+function schedulePush(){if(!gh)return;syncState="saving";setSync();clearTimeout(pushT);pushT=setTimeout(function(){sync()},1500)}
+function b64e(s){var b=new TextEncoder().encode(s),r="";for(var i=0;i<b.length;i++)r+=String.fromCharCode(b[i]);return btoa(r)}
+function b64d(s){var r=atob(s.replace(/\n/g,"")),b=new Uint8Array(r.length);for(var i=0;i<r.length;i++)b[i]=r.charCodeAt(i);return new TextDecoder().decode(b)}
+function api(method,body){return fetch("https://api.github.com/repos/"+gh.repo+"/contents/memorize.json",{method:method,headers:{Authorization:"Bearer "+gh.token,Accept:"application/vnd.github+json"},body:body?JSON.stringify(body):undefined,cache:"no-store"})}
+function merge(remote){var ch=false;Object.keys(remote).forEach(function(k){var r=remote[k],l=texts[k];if(!l||(r.updated||0)>(l.updated||0)){texts[k]=r;ch=true}});return ch}
+function refreshView(){
+  if(cur){var t=texts[cur.id];if(!t||t.deleted){if(!$("#editor"))renderList();return}
+    if(t.updated>(cur.updated||0)&&!$("#editor")&&!$("#ll")){cur=t;renderStudy(true)}}
+  else if(!$("#editor")&&!$("#gset"))renderList();
+}
+function sync(tries){
+  if(!gh||syncing)return;if(!navigator.onLine){setSync();return}syncing=true;syncState="busy";setSync();tries=tries||0;
+  api("GET").then(function(r){
+    if(r.status===404)return {sha:null,remote:{}};
+    if(!r.ok)throw new Error(r.status);
+    return r.json().then(function(j){var d={};try{d=JSON.parse(b64d(j.content))}catch(e){}return {sha:j.sha,remote:d.texts||{}}});
+  }).then(function(x){
+    var ch=merge(x.remote);
+    var need=Object.keys(texts).some(function(k){return !x.remote[k]||texts[k].updated>(x.remote[k].updated||0)});
+    var after=function(){syncing=false;syncState="synced";lsSave();setSync();if(ch)refreshView()};
+    if(!need){after();return}
+    var body={message:"sync",content:b64e(JSON.stringify({texts:texts}))};if(x.sha)body.sha=x.sha;
+    return api("PUT",body).then(function(r){
+      if(r.status===409||r.status===422){syncing=false;if(tries<2)return sync(tries+1);throw new Error("conflict")}
+      if(!r.ok)throw new Error(r.status);after();
+    });
+  }).catch(function(){syncing=false;syncState="error";setSync()});
+}
+if(gh){sync();document.addEventListener("visibilitychange",function(){if(!document.hidden)sync()});setInterval(function(){sync()},60000)}
+window.addEventListener("online",function(){if(gh)sync()});
+window.addEventListener("offline",function(){setSync()});
+function renderSettings(){
+  stopScroll();ft.classList.add("hide");cur=null;
+  hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
+  main.innerHTML='<div class="wrap" id="gset"><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  $("#bk").onclick=renderList;
+  $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
+    gh={repo:r,token:t};try{localStorage.setItem(GH_KEY,JSON.stringify(gh))}catch(e){}
+    syncing=false;sync();renderList()};
+  var d=$("#dc");if(d)d.onclick=function(){gh=null;try{localStorage.removeItem(GH_KEY)}catch(e){}renderList()};
+}
+
+/* ---------- helpers ---------- */
+function uuid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function rng(seed){var s=seed>>>0;return function(){s=(s+0x6D2B79F5)>>>0;var t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function shuffled(n,seed){var a=[],i,r=rng(seed);for(i=0;i<n;i++)a.push(i);for(i=n-1;i>0;i--){var j=Math.floor(r()*(i+1));var x=a[i];a[i]=a[j];a[j]=x}return a}
+function esc(s){return s.replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c]})}
+function mask(w,mode){
+  if(mode==="initial"){var f=false;return w.replace(/[\p{L}\p{N}]/gu,function(c){if(!f){f=true;return c}return "_"})}
+  return w.replace(/[\p{L}\p{N}]/gu,"_");
+}
+function stripImport(raw,name){
+  var t=raw;
+  if(/\.(html?|htm)$/i.test(name)){var d=new DOMParser().parseFromString(t,"text/html");t=d.body?d.body.innerText||d.body.textContent:t}
+  else if(/\.rtf$/i.test(name)){t=t.replace(/\\par[d]?/g,"\n").replace(/\{\\\*[^}]*\}/g,"").replace(/\\'([0-9a-f]{2})/gi,function(m,h){return String.fromCharCode(parseInt(h,16))}).replace(/\\[a-z]+-?\d* ?/gi,"").replace(/[{}]/g,"")}
+  return t.replace(/\r/g,"").trim();
+}
+
+/* ---------- library ---------- */
+function renderList(){
+  cur=null;stopScroll();ft.classList.add("hide");
+  hd.innerHTML='<h1>Memorize</h1><span class="sync" id="sync"></span><button id="gs">⚙</button><button class="p" id="new">+ New</button>';$("#gs").onclick=renderSettings;
+  setSync();$("#new").onclick=function(){renderEditor(null)};
+  var ids=Object.keys(texts).filter(function(k){return !texts[k].deleted}).sort(function(a,b){return(texts[b].updated||0)-(texts[a].updated||0)});
+  var h='<div class="wrap">';
+  if(!ids.length)h+='<p class="hint">No texts yet. Tap “+ New” to paste or import something to learn. Tap ⚙ to set up GitHub sync between your devices.</p>';
+  ids.forEach(function(id){var t=texts[id],p=Math.round((t.level||0)*100);
+    h+='<div class="card" data-id="'+id+'"><div style="flex:1;min-width:0"><b>'+esc(t.title||"Untitled")+'</b><small>'+(t.body||"").split(/\s+/).filter(Boolean).length+' words</small></div><div class="bar"><i style="width:'+p+'%"></i></div><small>'+p+'%</small></div>'});
+  main.innerHTML=h+'</div>';main.scrollTop=0;
+  Array.prototype.forEach.call(main.querySelectorAll(".card"),function(c){c.onclick=function(){cur=texts[c.dataset.id];renderStudy()}});
+}
+
+/* ---------- editor / import ---------- */
+function renderEditor(t){
+  stopScroll();ft.classList.add("hide");
+  hd.innerHTML='<button id="bk">‹ Back</button><h1>'+(t?"Edit text":"New text")+'</h1><button class="p" id="sv">Save</button>'+(t?'<button id="del">Delete</button>':"");
+  main.innerHTML='<div class="wrap" id="editor"><input type="text" id="ti" placeholder="Title" value="'+(t?esc(t.title).replace(/"/g,"&quot;"):"")+'"><textarea id="bd" placeholder="Paste or type your text. Line breaks are kept."></textarea><label class="f"><button onclick="this.nextElementSibling.click()">Import .txt / .html / .rtf</button><input type="file" id="fi" accept=".txt,.html,.htm,.rtf,text/*" class="hide"></label><p class="hint">PDFs: open the PDF, select all, copy, and paste here. Start a line with /// to leave it out of your study (it stays visible as a cue).</p></div>';
+  $("#bd").value=t?t.body:"";
+  $("#bk").onclick=function(){t?renderStudy():renderList()};
+  $("#fi").onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){$("#bd").value=stripImport(String(r.result),f.name);if(!$("#ti").value)$("#ti").value=f.name.replace(/\.[^.]+$/,"")};r.readAsText(f)};
+  $("#sv").onclick=function(){
+    var body=$("#bd").value.replace(/\r/g,"").trim(),offM=[];if(!body)return;
+    body=body.split("\n").map(function(l,i){if(/^\s*\/\/\//.test(l)){offM.push(i);return l.replace(/^\s*\/\/\/\s?/,"")}return l}).join("\n");
+    var n=t||{id:uuid(),level:0,mode:"blank",seed:Math.floor(Math.random()*1e9),speed:30};
+    n.title=$("#ti").value.trim()||body.split("\n")[0].slice(0,40);
+    if(t&&t.body!==body){n.seed=Math.floor(Math.random()*1e9)}
+    if(offM.length)n.off=offM;else if(!t||t.body!==body)n.off=[];
+    n.body=body;persist(n);cur=n;renderStudy();
+  };
+  var d=$("#del");if(d)d.onclick=function(){if(confirm("Delete this text on all devices?")){remove(t.id);renderList()}};
+}
+
+/* ---------- study view ---------- */
+function renderSelect(){
+  stopScroll();ft.classList.add("hide");
+  var lines=cur.body.split("\n"),off={},sel={};
+  (cur.off||[]).forEach(function(i){off[i]=1});
+  lines.forEach(function(l,i){if(l.trim()&&!off[i])sel[i]=1});
+  hd.innerHTML='<button id="bk">Cancel</button><h1>Select lines to study</h1><button class="p" id="sv">Done</button>';
+  main.innerHTML='<div class="wrap"><div class="row" style="margin-bottom:8px"><button id="sa">Select all</button><button id="da">Deselect all</button></div><div class="row" style="margin-bottom:6px"><input type="text" id="nm" placeholder="Your character’s name (e.g. MAGGIE)" style="flex:1;margin:0"><button id="au">Auto-select</button></div><p class="hint">Auto-select picks lines that start with your name (“MAGGIE: …”) or that follow a line containing only your name, until the next blank line. Tap any line to toggle it. Unselected lines stay visible as cues.</p><div id="ll"></div></div>';
+  function paint(){var h="";lines.forEach(function(l,i){if(!l.trim()){h+='<div style="height:10px"></div>';return}h+='<div class="sl'+(sel[i]?" on":"")+'" data-i="'+i+'">'+esc(l)+'</div>'});$("#ll").innerHTML=h}
+  paint();main.scrollTop=0;
+  $("#ll").onclick=function(e){var d=e.target.closest(".sl");if(!d)return;var i=d.dataset.i;if(sel[i])delete sel[i];else sel[i]=1;d.classList.toggle("on")};
+  $("#sa").onclick=function(){lines.forEach(function(l,i){if(l.trim())sel[i]=1});paint()};
+  $("#da").onclick=function(){sel={};paint()};
+  $("#au").onclick=function(){
+    var nm=$("#nm").value.trim().toLowerCase();if(!nm)return;
+    sel={};var follow=false;
+    lines.forEach(function(l,i){var t=l.trim().toLowerCase();
+      if(!t){follow=false;return}
+      if(t.replace(/[:.\-–\s]+$/,"")===nm){follow=true;return}
+      if(t.indexOf(nm)===0&&/^[:.\-–\s]/.test(t.slice(nm.length))){sel[i]=1;follow=false;return}
+      if(follow)sel[i]=1;
+    });paint();
+  };
+  $("#bk").onclick=function(){renderStudy()};
+  $("#sv").onclick=function(){cur.off=[];lines.forEach(function(l,i){if(l.trim()&&!sel[i])cur.off.push(i)});persist(cur);renderStudy()};
+}
+var scrollOn=false,raf=0,lastTs=0,acc=0;
+function stopScroll(){scrollOn=false;cancelAnimationFrame(raf);var b=$("#play");if(b)b.textContent="▶ Scroll"}
+function tick(ts){
+  if(!scrollOn)return;
+  if(lastTs){acc+=(ts-lastTs)/1000*cur.speed;var px=Math.floor(acc);if(px>=1){main.scrollTop+=px;acc-=px}}
+  lastTs=ts;raf=requestAnimationFrame(tick);
+}
+function normMode(m){return({blank:"words-random",initial:"except-random"})[m]||m||"words-random"}
+function build(){
+  cur.mode=normMode(cur.mode);
+  var lines=cur.body.split("\n"),words=[],lineInfo=[],offSet={};
+  (cur.off||[]).forEach(function(i){offSet[i]=1});
+  lines.forEach(function(ln,li){var ws=offSet[li]?[]:(ln.match(/\S+/g)||[]);lineInfo.push({ws:ws,start:words.length});ws.forEach(function(w){words.push({w:w,l:li})})});
+  var hiddenW={},hiddenL={},n=words.length,m=cur.mode,i,j;
+  var hb0=lines.some(function(x,q){return !x.trim()&&q>0&&q<lines.length-1}),pd0=0,pb0=true,lp0=[],pw={},pl={};
+  lines.forEach(function(ln){if(!ln.trim()){pb0=true;lp0.push(-1);return}if(hb0){if(pb0)pd0++}else pd0++;pb0=false;lp0.push(pd0)});
+  words.forEach(function(w,q){var p=lp0[w.l];(pw[p]=pw[p]||[]).push(q)});
+  lineInfo.forEach(function(x,q){if(x.ws.length){var p=lp0[q];(pl[p]=pl[p]||[]).push(q)}});
+  if(m==="lines"){
+    Object.keys(pl).forEach(function(p){var a=pl[p],c=Math.ceil(cur.level*a.length-1e-9);for(i=0;i<c;i++)hiddenL[a[a.length-1-i]]=1});
+  }else if(/^para/.test(m)){
+    var keep=+m.slice(4),hasBlank=lines.some(function(x,q){return !x.trim()&&q>0&&q<lines.length-1}),pid=0,prevBlank=true,linePara=[],groups={};
+    lines.forEach(function(ln){if(!ln.trim()){prevBlank=true;linePara.push(-1);return}if(hasBlank){if(prevBlank)pid++}else pid++;prevBlank=false;linePara.push(pid)});
+    words.forEach(function(w,q){var p=linePara[w.l];(groups[p]=groups[p]||[]).push(q)});
+    Object.keys(groups).forEach(function(p){
+      var h=groups[p].slice(keep),c=Math.ceil(cur.level*h.length-1e-9);
+      for(j=0;j<c;j++)hiddenW[h[h.length-1-j]]=1;
+    });
+  }else{
+    var dir=m.split("-")[1],rk=shuffled(n,cur.seed),pos={};
+    rk.forEach(function(w,r){pos[w]=r});
+    Object.keys(pw).forEach(function(p){
+      var a=pw[p].slice();
+      if(dir==="last")a.reverse();else if(dir==="random")a.sort(function(x,y){return pos[x]-pos[y]});
+      var c=Math.ceil(cur.level*a.length-1e-9);
+      for(j=0;j<c;j++)hiddenW[a[j]]=1;
+    });
+  }
+  var h="",idx=0;
+  lines.forEach(function(ln,li){
+    var parts=ln.split(/(\s+)/),out="";
+    parts.forEach(function(p){
+      if(!p)return;
+      if(/^\s+$/.test(p)){out+=p;return}
+      if(offSet[li]){out+='<span class="o">'+esc(p)+'</span>';return}
+      var hid=cur.mode==="lines"?hiddenL[li]:hiddenW[idx];
+      out+='<span class="w'+(hid?" h":"")+'" data-i="'+idx+'" data-o="'+esc(p).replace(/"/g,"&quot;")+'">'+esc(hid?mask(p,/^except/.test(cur.mode)?"initial":"blank"):p)+'</span>';
+      idx++;
+    });
+    h+='<span class="l">'+out+'</span>';
+  });
+  return h;
+}
+function renderStudy(keep){
+  if(!cur)return;
+  var top=keep?main.scrollTop:0;
+  hd.innerHTML='<button id="bk">‹</button><h1>'+esc(cur.title||"")+'</h1><span class="sync" id="sync"></span><button id="ln">Lines</button><button id="ed">Edit</button>';
+  ft.classList.remove("hide");
+  ft.innerHTML='<div class="row"><button id="rev" style="flex:1">− Reveal</button><button id="hide" class="p" style="flex:1">+ Hide</button></div>'+
+  '<div class="row"><input type="range" id="lv" min="0" max="100" value="'+Math.round(cur.level*100)+'"><span class="pct" id="pc"></span>'+
+  '<select id="md" style="max-width:58%"><optgroup label="Hide words except first letter"><option value="except-last">First letter · from last word</option><option value="except-first">First letter · from first word</option><option value="except-random">First letter · randomly</option></optgroup><optgroup label="Hide entire words"><option value="words-last">Words · from last word</option><option value="words-first">Words · from first word</option><option value="words-random">Words · randomly</option></optgroup><optgroup label="Show first words of each paragraph"><option value="para3">Show 3 words</option><option value="para2">Show 2 words</option><option value="para1">Show 1 word</option></optgroup><optgroup label="Line by line"><option value="lines">Hide entire line (from last)</option></optgroup></select></div>'+
+  '<div class="row"><button id="play">▶ Scroll</button><input type="range" id="sp" min="5" max="150" value="'+cur.speed+'"><button id="shuf" title="New random order">⟳ Reshuffle</button></div>';
+  main.innerHTML='<div id="read"></div>';
+  var rd=$("#read");draw();main.scrollTop=top;setSync();
+  $("#md").value=cur.mode;
+  $("#bk").onclick=renderList;$("#ed").onclick=function(){renderEditor(cur)};$("#ln").onclick=renderSelect;
+  function setLevel(v){cur.level=Math.max(0,Math.min(1,v));$("#lv").value=Math.round(cur.level*100);draw();persistSoon(cur)}
+  function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;$("#pc").textContent=Math.round(cur.level*100)+"%"}
+  var step=function(){var n=(cur.body.match(/\S+/g)||[]).length;return Math.max(0.03,Math.min(0.15,3/Math.max(n,1)*2))};
+  // Hide: tap = hide more, long press = hide everything
+  var hT,hLong=false,hb=$("#hide");
+  hb.onpointerdown=function(){hLong=false;hT=setTimeout(function(){hLong=true;setLevel(1);if(navigator.vibrate)navigator.vibrate(30)},600)};
+  hb.onpointerup=hb.onpointerleave=hb.onpointercancel=function(){clearTimeout(hT)};
+  hb.onclick=function(){if(hLong){hLong=false;return}setLevel(cur.level+0.1)};
+  // Reveal: tap = show more, long press = reset to 0
+  var rt,long=false,rv=$("#rev");
+  rv.onpointerdown=function(){long=false;rt=setTimeout(function(){long=true;setLevel(0);if(navigator.vibrate)navigator.vibrate(30)},600)};
+  rv.onpointerup=rv.onpointerleave=rv.onpointercancel=function(){clearTimeout(rt)};
+  rv.onclick=function(){if(long){long=false;return}setLevel(cur.level-0.1)};
+  $("#lv").oninput=function(e){setLevel(e.target.value/100)};
+  $("#md").onchange=function(e){cur.mode=e.target.value;draw();persistSoon(cur)};
+  $("#shuf").onclick=function(){cur.seed=Math.floor(Math.random()*1e9);draw();persistSoon(cur)};
+  $("#sp").oninput=function(e){cur.speed=+e.target.value;persistSoon(cur)};
+  $("#play").onclick=function(){
+    if(scrollOn){stopScroll();return}
+    scrollOn=true;lastTs=0;acc=0;this.textContent="❚❚ Stop";raf=requestAnimationFrame(tick);
+  };
+  main.addEventListener("touchstart",function(){if(scrollOn)stopScroll()},{passive:true});
+  // hold on text: temporarily reveal everything; tap a word: peek at it
+  var ht;
+  rd.onpointerdown=function(){ht=setTimeout(function(){rd.classList.add("all");Array.prototype.forEach.call(rd.querySelectorAll(".w.h"),function(s){s.textContent=s.dataset.o})},350)};
+  var up=function(){clearTimeout(ht);if(rd.classList.contains("all")){rd.classList.remove("all");var sc=main.scrollTop;draw();main.scrollTop=sc}};
+  rd.onpointerup=rd.onpointerleave=rd.onpointercancel=up;
+  rd.oncontextmenu=function(e){e.preventDefault()};
+  rd.onclick=function(e){var s=e.target.closest(".w.h");if(s){s.textContent=s.dataset.o;s.classList.add("t")}};
+}
+renderList();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+})();
+</script>
+</body>
+</html>
