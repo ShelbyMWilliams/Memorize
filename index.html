@@ -133,7 +133,7 @@ window.addEventListener("offline",function(){setSync()});
 function renderSettings(){
   stopScroll();ft.classList.add("hide");cur=null;
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
-  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-21-a</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-21-b</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
   $("#bk").onclick=renderList;
   $("#dsp").onclick=showDisplay;
   $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
@@ -255,21 +255,21 @@ function build(){
   // If the text has hardly any punctuation (lyrics, verse), each line is its own unit.
   var nl=0,tl=0;lines.forEach(function(ln,q){var t=ln.trim();if(!t||offSet[q])return;nl++;if(/[.!?\u2026]["'\u201d\u2019)\]]*$/.test(t))tl++});
   var lineMode=nl>2&&tl/nl<0.25,cg=null,pEnd=true,pPar=-1,pLine=-1,sn=0,ABBR=/^(mr|mrs|ms|dr|st|jr|sr|vs|prof)\.$/i;
-  var sg={},pgp={};
+  var sg={},pgp={},plg={};
   words.forEach(function(w,q){var p=lp0[w.l];
     if(pEnd||p!==pPar||(lineMode&&w.l!==pLine)){cg=sg[sn++]=[]}
-    if(!w.skip){cg.push(q);(pgp[p]=pgp[p]||[]).push(q)}
+    if(!w.skip){cg.push(q);(pgp[p]=pgp[p]||[]).push(q);(plg[w.l]=plg[w.l]||[]).push(q)}
     pEnd=/[.!?\u2026]["'\u201d\u2019)\]]*$/.test(w.w)&&!ABBR.test(w.w);pPar=p;pLine=w.l;
   });
-  [sg,pgp].forEach(function(o){Object.keys(o).forEach(function(k){if(!o[k].length)delete o[k]})});
-  pw=cur.unit==="sent"?sg:pgp;
+  [sg,pgp,plg].forEach(function(o){Object.keys(o).forEach(function(k){if(!o[k].length)delete o[k]})});
+  var un=cur.unit||"line";pw=un==="sent"?sg:un==="para"?pgp:plg;
   if(cur.k==null){var lg=0;Object.keys(pw).forEach(function(p){lg=Math.max(lg,pw[p].length)});cur.k=Math.round((cur.level||0)*lg)}
   cur.k=Math.max(0,cur.k|0);
   var hc=0,rk=shuffled(n,cur.seed),pos={};
   rk.forEach(function(w,r){pos[w]=r});
   if(/^sent/.test(m)){
     var dr=m.split("-")[1],byP={};
-    Object.keys(sg).forEach(function(g){var pp=lp0[words[sg[g][0]].l];(byP[pp]=byP[pp]||[]).push(sg[g])});
+    Object.keys(sg).forEach(function(g){var pp=un==="line"?words[sg[g][0]].l:lp0[words[sg[g][0]].l];(byP[pp]=byP[pp]||[]).push(sg[g])});
     Object.keys(byP).forEach(function(pp){
       var a=byP[pp].slice();
       if(dr==="last")a.reverse();else if(dr==="random")a.sort(function(x,y){return pos[x[0]]-pos[y[0]]});
@@ -342,7 +342,7 @@ function renderStudy(keep){
     '<button id="md" style="width:100%;text-align:left;margin-bottom:12px">Method: '+esc(modeLabel(cur.mode))+' \u203a</button>'+
     '<p class="hint" style="margin:0 0 4px">Hide progress</p><div class="row"><input type="range" id="lv" min="0" max="1" value="0"><span class="pct" id="pc" style="min-width:60px"></span></div>'+
     '<div class="row" style="margin:12px 0"><span style="flex:1">Words per Hide / Reveal tap</span><select id="st"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></div>'+
-    '<div class="row" style="margin:0 0 12px"><span style="flex:1">Start hiding from the end of each</span><select id="un"><option value="para">paragraph</option><option value="sent">sentence</option></select></div>'+
+    '<div class="row" style="margin:0 0 12px"><span style="flex:1">Start hiding from the end of each</span><select id="un"><option value="line">line (new line = new paragraph)</option><option value="para">block (blank-line separated)</option><option value="sent">sentence</option></select></div>'+
     '<div class="row" style="margin-bottom:12px"><button id="play">'+(scrollOn?"\u275a\u275a Stop scroll":"\u25b6 Autoscroll")+'</button><input type="range" id="sp" min="5" max="150" value="'+cur.speed+'"></div>'+
     '<div class="row"><button id="shuf" style="flex:1">\u27f3 Reshuffle random words</button></div>'+
     '<div class="row" style="margin-top:12px"><button id="ln" style="flex:1">Select lines</button><button id="ed" style="flex:1">Edit text</button></div>'+
@@ -356,7 +356,7 @@ function renderStudy(keep){
     q("#ed").onclick=function(){close();renderEditor(cur)};
     q("#aa").onclick=showDisplay;
     q("#st").value=String(cur.step||1);q("#st").onchange=function(e){cur.step=+e.target.value;persistSoon(cur)};
-    q("#un").value=cur.unit||"para";q("#un").onchange=function(e){cur.unit=e.target.value;draw();persistSoon(cur)};
+    q("#un").value=cur.unit||"line";q("#un").onchange=function(e){cur.unit=e.target.value;draw();persistSoon(cur)};
     q("#lv").oninput=function(e){setK(+e.target.value)};
     q("#shuf").onclick=function(){cur.seed=Math.floor(Math.random()*1e9);draw();persistSoon(cur)};
     q("#sp").oninput=function(e){cur.speed=+e.target.value;persistSoon(cur)};
