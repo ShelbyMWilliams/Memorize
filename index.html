@@ -40,6 +40,14 @@ textarea{min-height:50vh;resize:vertical}
 .sl{padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mu);cursor:pointer;white-space:pre-wrap}
 .sl.on{background:var(--ac2);color:var(--tx);border-color:var(--ac)}
 .w.t{background:var(--ac2)}
+#ft button{transition:transform .08s ease,filter .08s ease,opacity .15s}
+#ft button:active{transform:scale(.93);filter:brightness(1.3)}
+#ft button.hold{animation:hold .6s linear forwards}
+@keyframes hold{0%{transform:scale(.96);filter:brightness(1)}100%{transform:scale(.88);filter:brightness(1.6)}}
+#ft button.pulse{animation:pl .45s ease-out}
+@keyframes pl{0%{box-shadow:0 0 0 0 var(--ac);transform:scale(.9)}60%{transform:scale(1.04)}100%{box-shadow:0 0 0 16px transparent;transform:scale(1)}}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(8px);background:var(--ac);color:var(--bg);padding:8px 16px;border-radius:20px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:30}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .w.h .c{border-bottom:2px solid var(--mu)}
 .w.h .x{color:transparent}
 .w.t .c,#read.all .w.h .c{border-bottom-color:transparent}
@@ -68,23 +76,33 @@ var $=function(s){return document.querySelector(s)};
 var main=$("#main"),hd=$("#hd"),ft=$("#ft");
 var texts={}, cur=null, db=null, uid=null, col=null, saveT=null, lastWrite=0, syncState="local";
 var LS="memorize-texts-v1";
-var PK="memorize-prefs-v1",prefs={theme:"auto",fs:26};
-try{var pp=JSON.parse(localStorage.getItem(PK)||"null");if(pp){prefs.theme=pp.theme||"auto";prefs.fs=pp.fs||26}}catch(e){}
+var PK="memorize-prefs-v1",prefs={theme:"auto",fs:26,hap:true};
+try{var pp=JSON.parse(localStorage.getItem(PK)||"null");if(pp){prefs.theme=pp.theme||"auto";prefs.fs=pp.fs||26;prefs.hap=pp.hap!==false}}catch(e){}
 function applyPrefs(){var r=document.documentElement;if(prefs.theme==="auto")r.removeAttribute("data-theme");else r.setAttribute("data-theme",prefs.theme);r.style.setProperty("--fs",prefs.fs+"px")}
 function savePrefs(){try{localStorage.setItem(PK,JSON.stringify(prefs))}catch(e){}}
+var hapEl=null,toastT=0;
+function iosTick(){try{if(!hapEl){var l=document.createElement("label");l.setAttribute("aria-hidden","true");l.style.display="none";l.innerHTML='<input type="checkbox" switch>';document.head.appendChild(l);hapEl=l}hapEl.click()}catch(e){}}
+function buzz(kind){
+  if(prefs.hap===false)return;
+  try{if(navigator.vibrate){navigator.vibrate(kind==="end"?[18,60,30]:12);return}}catch(e){}
+  iosTick();if(kind==="end")setTimeout(iosTick,90);
+}
+function pulse(b){b.classList.remove("pulse");void b.offsetWidth;b.classList.add("pulse")}
+function msg(t){var e=document.getElementById("toast");if(!e){e=document.createElement("div");e.id="toast";document.body.appendChild(e)}e.textContent=t;e.classList.add("on");clearTimeout(toastT);toastT=setTimeout(function(){e.classList.remove("on")},1100)}
 function setFs(v,defer){prefs.fs=Math.max(14,Math.min(56,Math.round(v)));applyPrefs();if(!defer)savePrefs()}
 applyPrefs();
 function showDisplay(){
   if(document.getElementById("dp"))return;
   var d=document.createElement("div");d.id="dp";
   d.style.cssText="position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center";
-  d.innerHTML='<div style="background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px))"><div class="row" style="justify-content:space-between"><b style="font-size:18px">Display</b><button id="dx">Done</button></div><p class="hint">Reading text size (you can also pinch the text)</p><div class="row"><span style="font-size:14px">A</span><input type="range" id="fz" min="14" max="56" step="1"><span style="font-size:28px">A</span><span class="pct" id="fv"></span></div><p class="hint">Appearance</p><div class="row" id="tg"><button data-t="auto" style="flex:1">Auto</button><button data-t="light" style="flex:1">Light</button><button data-t="dark" style="flex:1">Dark</button></div><p class="hint">Saved on this device only, so your iPhone and iPad can each have their own size.</p></div>';
+  d.innerHTML='<div style="background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px))"><div class="row" style="justify-content:space-between"><b style="font-size:18px">Display</b><button id="dx">Done</button></div><p class="hint">Reading text size (you can also pinch the text)</p><div class="row"><span style="font-size:14px">A</span><input type="range" id="fz" min="14" max="56" step="1"><span style="font-size:28px">A</span><span class="pct" id="fv"></span></div><p class="hint">Appearance</p><div class="row" id="tg"><button data-t="auto" style="flex:1">Auto</button><button data-t="light" style="flex:1">Light</button><button data-t="dark" style="flex:1">Dark</button></div><p class="hint">Feedback when you tap Hide / Reveal</p><div class="row" id="hp"><button data-h="1" style="flex:1">Haptics on</button><button data-h="0" style="flex:1">Off</button></div><p class="hint">Saved on this device only, so your iPhone and iPad can each have their own size.</p></div>';
   document.body.appendChild(d);
   var fz=d.querySelector("#fz"),fv=d.querySelector("#fv"),tg=d.querySelector("#tg");
-  function paint(){fz.value=prefs.fs;fv.textContent=prefs.fs;Array.prototype.forEach.call(tg.children,function(b){b.className=b.dataset.t===prefs.theme?"p":""})}
+  function paint(){fz.value=prefs.fs;fv.textContent=prefs.fs;Array.prototype.forEach.call(tg.children,function(b){b.className=b.dataset.t===prefs.theme?"p":""});Array.prototype.forEach.call(d.querySelector("#hp").children,function(b){b.className=(b.dataset.h==="1")===(prefs.hap!==false)?"p":""})}
   paint();
   fz.oninput=function(){setFs(+fz.value);fv.textContent=prefs.fs};
   tg.onclick=function(e){var b=e.target.closest("button");if(!b)return;prefs.theme=b.dataset.t;applyPrefs();savePrefs();paint()};
+  d.querySelector("#hp").onclick=function(e){var b=e.target.closest("button");if(!b)return;prefs.hap=b.dataset.h==="1";savePrefs();paint();buzz("tap")};
   var close=function(){d.remove()};
   d.querySelector("#dx").onclick=close;d.onclick=function(e){if(e.target===d)close()};
 }
@@ -133,7 +151,7 @@ window.addEventListener("offline",function(){setSync()});
 function renderSettings(){
   stopScroll();ft.classList.add("hide");cur=null;
   hd.innerHTML='<button id="bk">\u2039 Back</button><h1>GitHub sync</h1><button class="p" id="sv">Save</button>';
-  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-21-b</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
+  main.innerHTML='<div class="wrap" id="gset"><button id="dsp" style="margin-bottom:12px">Text size &amp; appearance (light / dark)</button><p class="hint">Your texts are saved as one file (<code>memorize.json</code>) in a <b>private</b> GitHub repo you create. Do this once per device. The token stays on this device only.</p><label class="hint">Data repo (owner/name)</label><input type="text" id="gr" placeholder="yourname/memorize-data" autocapitalize="none" autocorrect="off" value="'+(gh?gh.repo:"")+'"><label class="hint">Fine-grained access token</label><input type="text" id="gt" placeholder="github_pat_\u2026" autocapitalize="none" autocorrect="off" value="'+(gh?gh.token:"")+'"><p class="hint">App version: 2026-11-21-c</p><p class="hint">Create the token at GitHub \u203a Settings \u203a Developer settings \u203a Fine-grained tokens. Give it access to <b>only</b> that one repo, with <b>Contents: Read and write</b>.</p>'+(gh?'<button id="dc">Disconnect this device</button>':"")+'</div>';
   $("#bk").onclick=renderList;
   $("#dsp").onclick=showDisplay;
   $("#sv").onclick=function(){var r=$("#gr").value.trim(),t=$("#gt").value.trim();if(!/^[^\/\s]+\/[^\/\s]+$/.test(r)||!t){alert("Enter the repo as owner/name and paste the token.");return}
@@ -323,16 +341,19 @@ function renderStudy(keep){
   function setK(v){cur.k=Math.max(0,Math.min(maxK,Math.round(v)));draw();persistSoon(cur)}
   function draw(){var s=main.scrollTop;rd.innerHTML=build();main.scrollTop=s;var rv0=$("#rev");if(rv0)rv0.style.opacity=cur.k<=0?".4":"1";var lv=$("#lv");if(lv){lv.max=Math.max(maxK,1);lv.value=Math.min(cur.k,maxK);$("#pc").textContent=Math.min(cur.k,maxK)+"/"+maxK}}
   var step=function(){var n=(cur.body.match(/\S+/g)||[]).length;return Math.max(0.03,Math.min(0.15,3/Math.max(n,1)*2))};
-  // Hide: tap = hide more, long press = hide everything
-  var hT,hLong=false,hb=$("#hide");
-  hb.onpointerdown=function(){hLong=false;hT=setTimeout(function(){hLong=true;setK(maxK);if(navigator.vibrate)navigator.vibrate(30)},600)};
-  hb.onpointerup=hb.onpointerleave=hb.onpointercancel=function(){clearTimeout(hT)};
-  hb.onclick=function(){if(hLong){hLong=false;return}setK(cur.k+(cur.step||1))};
-  // Reveal: tap = show more, long press = reset to 0
-  var rt,long=false,rv=$("#rev");
-  rv.onpointerdown=function(){long=false;rt=setTimeout(function(){long=true;setK(0);if(navigator.vibrate)navigator.vibrate(30)},600)};
-  rv.onpointerup=rv.onpointerleave=rv.onpointercancel=function(){clearTimeout(rt)};
-  rv.onclick=function(){if(long){long=false;return}setK(cur.k-(cur.step||1))};
+  // Hide / Reveal: tap = one step, hold = all. Each gives a press ring, a haptic tick, and a distinct "all done" pulse.
+  function wire(btn,dir){
+    var tm,lg=false;
+    btn.onpointerdown=function(){lg=false;btn.classList.add("hold");tm=setTimeout(function(){lg=true;btn.classList.remove("hold");setK(dir>0?maxK:0);buzz("end");pulse(btn);msg(dir>0?"All words hidden":"All words revealed")},600)};
+    var cancel=function(){clearTimeout(tm);btn.classList.remove("hold")};
+    btn.onpointerup=btn.onpointerleave=btn.onpointercancel=cancel;
+    btn.onclick=function(){
+      if(lg){lg=false;buzz("end");return}
+      setK(cur.k+dir*(cur.step||1));
+      if(dir>0?cur.k>=maxK:cur.k<=0){buzz("end");pulse(btn);msg(dir>0?"All words hidden":"All words revealed")}else buzz("tap");
+    };
+  }
+  wire($("#hide"),1);wire($("#rev"),-1);
   function openSheet(){
     if($("#sh"))return;
     var d=document.createElement("div");d.id="sh";
